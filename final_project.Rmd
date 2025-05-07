@@ -1,0 +1,318 @@
+---
+title: "Color Classification Using Random Forest"
+output: html_document
+date: "2025-05-02"
+---
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+str(knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE))
+```
+## 1. Introduction
+
+As a Computer Vision enthusiast, it is not hard for me to choose a dataset about image processing to be my focus for the final project for my Introduction to Data Science course. Nevertheless, I do not aim for complicated problems regarding this field of study but rather a regular machine learning exercise: how do computer categorize colors?.
+As someone with limited art and design background, I believe that the domain knowledge of this project only requires some extra reading about color modeling.
+This project will be a supervised learning classification problem that is planned to solve with a Random Forest Model.
+
+```{r}
+library(tidyverse)
+library(grDevices)
+library(randomForest)
+library(openintro)
+library(caret)
+library(pROC)
+```
+The dataset used for this project entails of four variables, with the first three being the RGB values and the last is the label that contains eleven basic colors: Red, Orange, Brown, Yellow, Green, Blue, Purple, Pink, Black, Grey, White.
+
+RGB is one of the most popular ways of representing colors in numbers. This dataset is created in 2020 by AjinkyaChavan9 on GitHub as part of their Color Classifier Deep Learning Project. The dataset (and source code) of their project is currently published on Google Colab as: https://github.com/AjinkyaChavan9/RGB-Color-Classifier-with-Deep-Learning-using-Keras-and-Tensorflow/blob/master/Dataset/final_data.csv.
+Particularly, it is important in this project to acknowledge that since the colors are self-labeled, it does not promise accuracy in identifying the colors in other context. For example, a color labeled "Pink" in this context might also interpreted as "Orange" or "Red". The reasons for this can be more easily seen as we explore the data. The original dataset contains of 5053 rows and 4 columns.
+
+## 2. Data Import and Wrangling
+
+First, I read the data into R as a tibble, and then check for missing values and find none. Upon further inspection, we know that this dataset has a much larger samples of Blue and Green, while having much less samples of Black and White. However, this does not make the dataset problematic, since Black and White are understood to be achromatic colors, lacking the variety of shades compared to others.
+
+```{r}
+# Read in the dataset
+color <- read_csv("final_data.csv")
+```
+
+```{r eval=FALSE, include=FALSE}
+# Check for missing values in the dataset
+color |>
+  is.null()
+
+# Inspect # of color labels
+color |>
+  count(label)
+```
+
+Although the original dataset displays colors in RGB values, looking at other Computer Vision project, I choose to convert the RGB model into the HSV model.
+The HSV model also uses 3 numbers to encode colors. However, this system measures colors based on their Hue, Saturation, and Value, and closer to *human perception of colors*. It also separates color information from brightness, as human might interpret colors differently with different screen qualities.
+
+```{r}
+
+# Convert the RGB data into a matrix
+rgb_matrix <- color |>
+  select(c(red, green, blue)) |>
+  as.matrix() |>
+  t()
+
+# Convert RGB into HSV and turn it back into a dataframe
+hsv <- rgb2hsv(rgb_matrix) |>
+  t() |>
+  as.data.frame()
+
+# Add the label (of colors) to the new dataframe and change it into a factor
+color_hsv <- hsv |>
+  mutate(label = color$label) |>
+  mutate(label = as.factor(label))
+
+```
+
+After converting RGB values into HSV, it is fundamental to note that these data have a dependent meaning on one another. For example, a single value of Saturation cannot decide which color is it, it is through the combination of the 3 values, and then the human eyes that we are able to label them. More examples of this characteristic is provided below.
+
+## 3. Data Visualization
+
+For this visualization process, we are going to plot the HSV data separately for each labeled color. With that being said, it is important to keep in mind that the the interpretation of a color depend on how all 3 values interact with one another.
+
+```{r}
+# Pivot dataframe for visualization
+color_hsv_pivotted <- color_hsv |>
+  pivot_longer(cols = c("h", "s", "v"),
+               names_to = "hsv",
+               values_to = "data")
+```
+
+
+```{r}
+# Plot for Red labels
+color_hsv_pivotted |>
+  filter(label == "Red") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Red HSV Distribution")
+```
+
+```{r}
+# Plot for Orange labels
+color_hsv_pivotted |>
+  filter(label == "Orange") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Orange HSV Distribution")
+```
+```{r}
+# Plot for Brown labels
+color_hsv_pivotted |>
+  filter(label == "Brown") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Brown HSV Distribution")
+```
+
+```{r}
+# Plot for Yellow labels
+color_hsv_pivotted |>
+  filter(label == "Yellow") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Yellow HSV Distribution")
+```
+```{r}
+# Plot for Green labels
+color_hsv_pivotted |>
+  filter(label == "Green") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Green HSV Distribution")
+```
+```{r}
+# Plot for Blue labels
+color_hsv_pivotted |>
+  filter(label == "Blue") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Blue HSV Distribution")
+```
+```{r}
+# Plot for Purple labels
+color_hsv_pivotted |>
+  filter(label == "Purple") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Purple HSV Distribution")
+```
+
+
+```{r}
+# Plot for Pink labels
+color_hsv_pivotted |>
+  filter(label == "Pink") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Pink HSV Distribution")
+```
+```{r}
+# Plot for Black labels
+color_hsv_pivotted |>
+  filter(label == "Black") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Black HSV Distribution")
+```
+```{r}
+# Plot for Grey labels
+color_hsv_pivotted |>
+  filter(label == "Grey") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "Grey HSV Distribution")
+```
+```{r}
+# Plot for White labels
+color_hsv_pivotted |>
+  filter(label == "White") |>
+  ggplot(aes(x = hsv, y = data)) +
+  geom_jitter() +
+  labs(title = "White HSV Distribution")
+```
+\
+From these visualization, we can see that colors that are next to each other on the color chart do not have much difference in their graphs (i.e.: Pink & Purple), while the visualization of "Hue" have much contrast for complementary colors. While the "Saturation" and "Value" values spread out, the "Hue" values often gather in one cluster per one graph. This is reasonable theoretically since hue indicates the pure pigment of the color, while saturation and value indicate shades. The exceptions to this are Grey and Black, where the "Hue" values spread, Brown and Red, where the "Hue" values stand in 2 distinct clusters, low and high. There are also noticeable outliers among the "Hue" values of many labels.
+The reasons for these are:
+1. Diverse range of shades. i.e.: A high and low values of hue in Red indicate two colors that are both perceived as shades of Red. Within this project, we want the data to be diverse.
+2. Human Perspective. i.e.: I have inspected a significant outlier of Pink. The color when converted into standard HSV values turn out to be a shade that I think can also be categorized as Orange or Light Red, as mentioned before.
+
+With these information, we can expect that it is less easy for our model to confuse complementary colors, while colors that share similar shades are easy to confuse. 
+
+```{r include=FALSE}
+color_hsv |>
+  filter(label == "Pink") |>
+  filter(h < 0.25)
+```
+
+## 4. Data Modeling
+
+Since our dataset is not relatively moderate, my choice is to split the test/train data into 80/20. From the visualizations, we can expect a variety of unique combination of HSV for each color, so I believe 80% of data allows the model to identify a diverse range of shades. 
+
+```{r}
+set.seed(352)
+# Split data into train and test
+train_indexes <- as.vector(createDataPartition(color_hsv$label, 
+                                               p = 0.8, list = FALSE))
+color_train <- slice(color_hsv, train_indexes)
+color_test <- slice(color_hsv, -train_indexes)
+```
+
+```{r}
+set.seed(233)
+# Build the model that use all three variables except "label" as predictor
+rf_model <- randomForest(label ~ ., data = color_train)
+```
+
+```{r}
+# Inspect the model
+rf_model
+```
+
+The default setting uses 500 trees. Inspecting the OOB errors:
+```{r}
+rf_model$err.rate[,1]
+```
+
+We can see signs of convergence as the trees grow up to 500. I want to visualize how the trend of convergence looks like:
+
+```{r}
+
+# Data Wrangling
+
+# Convert the matrix into a tibble
+oob_err_df <- as_tibble(rf_model$err.rate) |>
+  # Denote the no. of tree
+  mutate(num_trees = row_number()) |>
+  # Convert to long format
+  pivot_longer(cols = -num_trees, 
+               names_to = "error_type", 
+               values_to = "error_rate") |>
+  # Make column type change and rename value for readability
+  mutate(error_type = fct_recode(error_type,
+                                 "Overall" = "OOB"),
+         # Calculate accuracy (= 1 - OOB error)
+         accuracy = 1 - error_rate
+)
+
+# Data Visualization
+oob_err_df |>
+  # Reorder the label for readability
+  mutate(error_type_ordered = fct_reorder2(error_type, 
+                                           num_trees, 
+                                           accuracy)) |>
+  ggplot(aes(x = num_trees, 
+             y = accuracy, 
+             color = error_type_ordered)) +
+  geom_line() +
+  labs(title = "Out-of-bag accuracy as a function of the number of trees",
+       x = "# of trees",
+       y = "Out-of-bag accuracy",
+       color = "Class") +
+  theme_classic()
+
+
+```
+What an interesting graph! While the OOB error rates are much more stable for Green, Blue, Pink, and Brown, the rest show more fluctuation. We might already expect this when looking at the Confusion Matrix when first predicting the model. Further explanation for the difference between these classes will be discussed below. Overall, we already see the sign of convergence at around 40 trees, so the use of up to 500 trees might be redundant in some cases. Within this graph, we see that there are still unpredictable peak at around 350 trees, although most of the classes have stabilized data at 300 trees. Considering both the runtime and accuracy, I choose to stick with ntree = 300.
+
+
+The number of variable used for splitting being 1 is mathematically reasonable by default setting of only having 3 predictor variables. However, as the number of predictor variables is small I highly want to evaluate the options of considering 2 and all 3 variables when splitting, rather than just randomly choose with 1.
+
+```{r}
+# Try all 3 options of mtry
+tune_grid <- expand.grid(mtry = 1:3)
+# Set up the training function
+ctrl <- trainControl(method = "oob") 
+# Fit the randomForest using different mtry values
+set.seed(345)
+rf_tuned <- train(
+ label ~ .,
+ data = color_train,
+ method = "rf",
+ trControl = ctrl,
+ tuneGrid = tune_grid,
+ ntree = 250
+)
+
+# Inspect the result
+print(rf_tuned)
+```
+From this result. It is reasonable to choose mtry = 2.
+
+```{r}
+
+set.seed(5632)
+# Refit the model
+rf_model_final <- randomForest(label ~ ., 
+                               data = color_train,
+                               mtry = rf_tuned$finalModel$tuneValue$mtry,
+                               ntree = 300)
+
+# Calculate the predicted values
+predicted_test <- predict(rf_model_final,
+                          newdata = color_test, type="response")
+# Calculate the predicted probabilites
+predicted_prob_test <- predict(rf_model_final,
+                               newdata = color_test, type="prob")
+
+# Evaluate the new model
+rf_model_final
+
+```
+This new model have a lower OOB error of 13.05%, which is a positive result despite not being too significant. This suggests that the model needs further tuning.
+
+## 5. Conclusion & Discussion
+
+Within the scope of this project, I have learned that color classifier is with HSV data is a question that the solution to it has difficult problems in so many ways, from data labeling, ensuring diverse data collection, handling large & unique combinations of data, and most importantly: classifying problems between similar shades of colors. Each color have different difficulty level of classification.
+
+This project, therefore, still has many limitations to it. The dataset has human bias and not too diverse. This project also lacking of exploration and examination of different models and hyperparameters.
+
+As for further work, I would like to explore more practices of classifying color in machine learning (i.e.: good metrics, data wrangling, etc.) and examining this with different models and hyperparameters.
+
+## 6. Reference
+
+Chavan, A. (2020). *RGB Color Classifier with Deep Learning using Keras and Tensorflow* [Data set]. https://github.com/AjinkyaChavan9/RGB-Color-Classifier-with-Deep-Learning-using-Keras-and-Tensorflow
