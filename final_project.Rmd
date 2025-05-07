@@ -1,6 +1,7 @@
 ---
 title: "Color Classification Using Random Forest"
 output: html_document
+author: Diepanh Do
 date: "2025-05-02"
 ---
 
